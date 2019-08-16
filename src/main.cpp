@@ -12,6 +12,36 @@ MQTTClient client;
 
 CRGB leds[12];
 
+// Helper function that blends one uint8_t toward another by a given amount
+void nblendU8TowardU8( uint8_t& cur, const uint8_t target, uint8_t amount)
+{
+  if( cur == target) return;
+
+  if( cur < target ) {
+    uint8_t delta = target - cur;
+    delta = scale8_video( delta, amount);
+    cur += delta;
+  } else {
+    uint8_t delta = cur - target;
+    delta = scale8_video( delta, amount);
+    cur -= delta;
+  }
+}
+
+// This function modifies 'cur' in place.
+CRGB fadeTowardColor( CRGB& cur, const CRGB& target, uint8_t amount)
+{
+  uint8_t r = cur.red;
+  uint8_t g = cur.green;
+  uint8_t b = cur.blue;
+
+	nblendU8TowardU8( r, target.red,   amount);
+  nblendU8TowardU8( g, target.green, amount);
+  nblendU8TowardU8( b, target.blue,  amount);
+
+  return CRGB(r,g,b);
+}
+
 void setupParts() {
 	client.publish("homie/ledring/$homie", "4.0.0", true, 1);
 	client.publish("homie/ledring/$name", "LED Ring", true, 1);
@@ -64,12 +94,18 @@ void messageReceived(String &topic, String &payload) {
 	b = payload.substring(last+1).toInt();
 
 	CRGB color(r, g, b);
+	CRGB prevColor = leds[0];
 
-	for(int i=0; i < 12; i++) {
-    leds[i] = color;
-  }
+	for (uint8_t j=0; j < 255; j++) {
+		CRGB currentColor = fadeTowardColor(prevColor, color, j);
 
-	FastLED.show();
+		for(int i=0; i < 12; i++) {
+    	leds[i] = currentColor;
+  	}
+
+		FastLED.show();
+		delay(3);
+	}
 
 	client.publish("homie/ledring/ring/color", payload, true, 1);
 }
