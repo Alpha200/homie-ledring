@@ -13,14 +13,18 @@ MQTTClient client;
 CRGB leds[12];
 
 void setupParts() {
-	client.publish("homie/ledring/$homie", "3.0", true, 1);
+	client.publish("homie/ledring/$homie", "4.0.0", true, 1);
 	client.publish("homie/ledring/$name", "LED Ring", true, 1);
 	client.publish("homie/ledring/$nodes", "ring", true, 1);
+	client.publish("homie/ledring/$extensions", "", true, 1);
 	client.publish("homie/ledring/ring/$name", "Ring", true, 1);
+	client.publish("homie/ledring/ring/$type", "Neopixel", true, 1);
 	client.publish("homie/ledring/ring/$properties", "color", true, 1);
-	client.publish("homie/ledring/ring/humidity/$name", "Farbe", true, 1);
-	client.publish("homie/ledring/ring/humidity/$setable", "true", true, 1);
-	client.publish("homie/ledring/ring/humidity/$datatype", "color", true, 1);
+	client.publish("homie/ledring/ring/color/$name", "Farbe", true, 1);
+	client.publish("homie/ledring/ring/color/$settable", "true", true, 1);
+	client.publish("homie/ledring/ring/color/$datatype", "color", true, 1);
+	client.publish("homie/ledring/ring/color/$format", "rgb", true, 1);
+	client.publish("homie/ledring/ring/color", "0,0,0", true, 1);
 }
 
 void connect() {
@@ -66,6 +70,8 @@ void messageReceived(String &topic, String &payload) {
   }
 
 	FastLED.show();
+
+	client.publish("homie/ledring/ring/color", payload, true, 1);
 }
 
 void setup() {
