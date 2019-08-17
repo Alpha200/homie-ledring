@@ -2,19 +2,22 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFiMulti.h>
-
 #include <MQTT.h>
 #include "FastLED.h"
+
+#include "secrets.h"
+
+#define NUM_LEDS 12
+#define LED_PIN D2
+#define DEVICE_ID "ledring"
 
 ESP8266WiFiMulti net;
 WiFiClient wifiClient;
 MQTTClient client;
 
-CRGB leds[12];
+CRGB leds[NUM_LEDS];
 
-// Helper function that blends one uint8_t toward another by a given amount
-void nblendU8TowardU8( uint8_t& cur, const uint8_t target, uint8_t amount)
-{
+void nblendU8TowardU8(uint8_t& cur, const uint8_t target, uint8_t amount) {
   if( cur == target) return;
 
   if( cur < target ) {
@@ -28,33 +31,31 @@ void nblendU8TowardU8( uint8_t& cur, const uint8_t target, uint8_t amount)
   }
 }
 
-// This function modifies 'cur' in place.
-CRGB fadeTowardColor( CRGB& cur, const CRGB& target, uint8_t amount)
-{
+CRGB fadeTowardColor(const CRGB& cur, const CRGB& target, uint8_t amount) {
   uint8_t r = cur.red;
   uint8_t g = cur.green;
   uint8_t b = cur.blue;
 
-	nblendU8TowardU8( r, target.red,   amount);
-  nblendU8TowardU8( g, target.green, amount);
-  nblendU8TowardU8( b, target.blue,  amount);
+	nblendU8TowardU8(r, target.red, amount);
+  nblendU8TowardU8(g, target.green, amount);
+  nblendU8TowardU8(b, target.blue, amount);
 
   return CRGB(r,g,b);
 }
 
 void setupParts() {
-	client.publish("homie/ledring/$homie", "4.0.0", true, 1);
-	client.publish("homie/ledring/$name", "LED Ring", true, 1);
-	client.publish("homie/ledring/$nodes", "ring", true, 1);
-	client.publish("homie/ledring/$extensions", "", true, 1);
-	client.publish("homie/ledring/ring/$name", "Ring", true, 1);
-	client.publish("homie/ledring/ring/$type", "Neopixel", true, 1);
-	client.publish("homie/ledring/ring/$properties", "color", true, 1);
-	client.publish("homie/ledring/ring/color/$name", "Farbe", true, 1);
-	client.publish("homie/ledring/ring/color/$settable", "true", true, 1);
-	client.publish("homie/ledring/ring/color/$datatype", "color", true, 1);
-	client.publish("homie/ledring/ring/color/$format", "rgb", true, 1);
-	client.publish("homie/ledring/ring/color", "0,0,0", true, 1);
+	client.publish("homie/" DEVICE_ID "/$homie", "4.0.0", true, 1);
+	client.publish("homie/" DEVICE_ID "/$name", "LED Ring", true, 1);
+	client.publish("homie/" DEVICE_ID "/$nodes", "ring", true, 1);
+	client.publish("homie/" DEVICE_ID "/$extensions", "", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/$name", "Ring", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/$type", "Neopixel", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/$properties", "color", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/color/$name", "Color", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/color/$settable", "true", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/color/$datatype", "color", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/color/$format", "rgb", true, 1);
+	client.publish("homie/" DEVICE_ID "/ring/color", "0,0,0", true, 1);
 }
 
 void connect() {
@@ -65,7 +66,7 @@ void connect() {
     delay(1000);
   }
 
-  client.setWill("homie/ledring/$state", "lost", true, 1);
+  client.setWill("homie/" DEVICE_ID "/$state", "lost", true, 1);
 
   Serial.print("\nconnecting...");
 
@@ -79,8 +80,16 @@ void connect() {
 
   setupParts();
 
-	client.subscribe("homie/ledring/ring/color/set");
-  client.publish("homie/ledring/$state", "ready", true, 1);
+	client.subscribe("homie/" DEVICE_ID "/ring/color/set");
+  client.publish("homie/" DEVICE_ID "/$state", "ready", true, 1);
+}
+
+void showColor(const CRGB& color) {
+  for(int i=0; i < NUM_LEDS; i++) {
+    	leds[i] = color;
+  }
+
+	FastLED.show();
 }
 
 void messageReceived(String &topic, String &payload) {
@@ -98,38 +107,29 @@ void messageReceived(String &topic, String &payload) {
 
 	for (uint8_t j=0; j < 255; j++) {
 		CRGB currentColor = fadeTowardColor(prevColor, color, j);
-
-		for(int i=0; i < 12; i++) {
-    	leds[i] = currentColor;
-  	}
-
-		FastLED.show();
+    showColor(currentColor);
 		delay(3);
 	}
 
-	client.publish("homie/ledring/ring/color", payload, true, 1);
+  showColor(color);
+	client.publish("homie/" DEVICE_ID "/ring/color", payload, true, 1);
 }
 
 void setup() {
 	Serial.begin(115200);
 	delay(5000);
 
-	FastLED.addLeds<NEOPIXEL, D2>(leds, 12);
+	FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
+  showColor(CRGB::Black);
 
-	for(int i=0; i < 12; i++) {
-    leds[i] = CRGB::Black;
-  }
-
-	FastLED.show();
-
-	net.addAP("***REMOVED***", "***REMOVED***");
+	net.addAP(WIFI_SSID, WIFI_PASSWORD);
 
 	while (net.run() != WL_CONNECTED) {
 		Serial.print(".");
 	    delay(250);
 	}
 
-	client.begin("192.168.178.206", wifiClient);
+	client.begin(MQTT_SERVER, wifiClient);
 	client.onMessage(messageReceived);
 
 	connect();
